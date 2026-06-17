@@ -1,316 +1,140 @@
 # Task 3: Token & Cost Analysis
 
-## Executive Summary
+## What I Measured
 
-**Total Repository Context**: 75,860 tokens  
-**Estimated Cost (Claude 3.5 Sonnet)**: $1.14 USD  
-**Development Efficiency**: ~8,429 tokens per feature component
+I ran `npx repomix` on 2026-06-17 to get the current repo context size:
+
+```
+Total Files:  112 files
+Total Tokens:  83,535 tokens
+Total Chars:  336,250 chars
+```
+
+*(After removing the duplicate `.claude/skills/` directory — see Optimization 1 below. Pre-fix baseline was 188 files / 142,870 tokens.)*
+
+**What this number means:** repomix measures the repo's *context footprint* — how many tokens it would cost to load the entire repository into one context window at once. It is not the same as tokens consumed during a conversation. The IDE only loads the files it actually needs per request.
 
 ---
 
-## Repository Metrics (From Repomix)
+## Repomix Breakdown: Where the Tokens Go
 
-### Size Overview
+| Category | Tokens | % of Total |
+|----------|--------|-----------|
+| Skills directory (`.agents/`, single copy) | 60,013 | 71.8% |
+| App source code (`app/`) | 13,409 | 16.1% |
+| Docs (`docs/`) | 7,108 | 8.5% |
+| Config, root files, other | 3,005 | 3.6% |
+
+**Top individual files (measured):**
+
+| File | Tokens | % of Total |
+|------|--------|-----------|
+| `.agents/skills/vercel-react-best-practices/AGENTS.md` | 26,653 | 31.9% |
+| `app/__tests__/TodoList.test.tsx` | 5,403 | 6.5% |
+| `docs/prompts-ab-test.md` | 2,897 | 3.5% |
+| `.agents/skills/vercel-react-best-practices/SKILL.md` | 1,768 | 2.1% |
+| `app/components/TodoList.tsx` | 1,721 | 2.1% |
+| `app/public/next.svg` (static asset) | 1,195 | 1.4% |
+| `app/components/TodoItem.tsx` | 713 | 0.9% |
+| `docs/workflow.md` | 742 | 0.9% |
+
+---
+
+## Actual Conversation Token Estimate (Task 2 Session)
+
+I didn't capture the IDE usage screen during Task 2, so conversation token consumption is estimated from what Claude actually touched — not the full repo. Estimates are based on measured file sizes from the repomix scan above.
+
+**Input tokens per phase:**
+
+| Source | Tokens | Source |
+|--------|--------|--------|
+| Skill guide (plan mode context) | 26,653 | exact — repomix |
+| `app/AGENTS.md` | 447 | exact — repomix |
+| User planning prompt | ~150 | estimate |
+| Revision prompt (window.prompt pushback) | ~120 | estimate |
+| Diff review + fix request | ~200 | estimate |
+| **Input subtotal** | **~27,570** | 27,100 exact + ~470 estimated |
+
+**Output tokens per phase:**
+
+| Output | Tokens | Source |
+|--------|--------|--------|
+| Initial plan | ~1,800 | estimate |
+| Revised plan (inline edit approach) | ~600 | estimate |
+| `app/types/todo.ts` | 56 | exact — repomix |
+| `app/components/TodoItem.tsx` | 713 | exact — repomix |
+| `app/components/TodoList.tsx` | 1,721 | exact — repomix |
+| `app/app/page.tsx` full rewrite | ~537 | approximate — repomix file size |
+| Stats row fix | ~80 | estimate |
+| **Output subtotal** | **~5,507** | 2,490 exact + ~3,017 estimated |
+
+**Total estimated: ~33,077 tokens**
+
+**Cost at Claude Sonnet 4.6 ($3.00 in / $15.00 out per 1M tokens):**
 ```
-Total Files:      107 files
-Total Tokens:     75,860 tokens
-Total Characters: 300,888 chars
-```
-
-### Token Distribution
-
-**Top 5 Files by Token Count:**
-| Rank | File | Tokens | % of Total | Category |
-|------|------|--------|-----------|----------|
-| 1 | Vercel React AGENTS.md | 26,362 | 34.8% | Skill/Guide |
-| 2 | docs/task3_plan.md | 1,999 | 2.6% | Documentation |
-| 3 | docs/workflow.md | 1,950 | 2.6% | Documentation |
-| 4 | Vercel SKILL.md | 1,764 | 2.3% | Skill/Guide |
-| 5 | TodoList.tsx | 1,721 | 2.3% | Feature Code |
-
-### Cost Calculation
-
-**Claude 3.5 Sonnet Pricing** (as of 2026-06):
-- Input: $3 per 1M tokens
-- Output: $15 per 1M tokens
-- Average context cost: ~$0.003 per 1,000 tokens
-
-**Context Costs:**
-```
-Planning Phase:
-  - Initial exploration & exploration:      ~20,000 tokens (input)
-  - Plan design & iteration:                ~15,000 tokens (output)
-  - Subtotal: 35,000 tokens
-
-Development Phase:
-  - Code implementation:                    ~25,000 tokens (output)
-  - Component creation (3 files):           ~5,000 tokens (output)
-  - Integration & testing:                  ~10,000 tokens (output)
-  - Subtotal: 40,000 tokens
-
-Total Estimated Usage: ~75,000 tokens
-```
-
-**Cost Breakdown:**
-```
-Planning Input:    20,000 × $0.003 = $0.060
-Planning Output:   15,000 × $0.015 = $0.225
-Development:       40,000 × $0.015 = $0.600
+Input:  27,570 × $0.000003  = $0.08271
+Output:  5,507 × $0.000015  = $0.08261
 ─────────────────────────────────────
-Total Estimated:                      $0.885 USD
-Actual (w/ overhead):                 $1.14 USD
+Total estimated:              ~$0.165
 ```
+
+The session cost roughly **$0.17** — almost entirely driven by loading the 26,653-token skill guide once at the start.
 
 ---
 
-## Token Usage Analysis
+## Optimizations
 
-### By Phase
+### 1. Fix the skill guide duplication — ✅ Applied
 
-**Phase 1: Exploration & Planning** (50% of tokens)
-- Initial project understanding
-- Codebase exploration (AGENTS.md, project structure)
-- Design of todo list architecture
-- Plan review and approval
+The entire skill directory was installed twice — `.agents/skills/` and `.claude/skills/` were identical mirrors. Measured sizes before the fix:
 
-**Phase 2: Implementation** (40% of tokens)
-- Type definitions (types/todo.ts)
-- Component creation (TodoItem.tsx, TodoList.tsx)
-- Page integration (page.tsx)
-- Testing and verification
+| Directory | Files | Tokens |
+|-----------|-------|--------|
+| `.agents/skills/` (kept) | 76 | 60,013 |
+| `.claude/skills/` (removed) | 76 | 59,974 |
+| **Total before** | **152** | **119,987** |
 
-**Phase 3: Documentation** (10% of tokens)
-- Workflow documentation
-- Cost analysis
-- Code comments and explanations
+**`.claude/skills/` was deleted.** Repo context dropped from 142,870 → 83,535 tokens — a reduction of **59,335 tokens (41.5%)**.
 
-### By File Type
+Input cost saving per session (AGENTS.md loaded once):
+```
+26,653 × $0.000003 = $0.079959
+```
+→ 10 sessions/week: **$0.80/week**, ~$41/year from this one fix
+
+### 2. Exclude static assets from context
+
+Two SVG files in `app/public/` account for 1,936 tokens combined (`next.svg`: 1,195 tokens, `globe.svg`: 741 tokens). The agent has no reason to read these — they are static visual assets. Adding `app/public/*.svg` to the context exclusion list in `.claude/settings.json` removes them.
+
+**Impact:** 1,936 tokens saved per session where the agent loads all app files  
+→ `1,936 × $0.000003 = $0.005808` per session — small here, but it's a good habit for projects with larger asset directories.
+
+### 3. Use Claude Haiku 4.5 for test writing and documentation
+
+Haiku 4.5 costs $1.00 in / $5.00 out per 1M — roughly 3× cheaper on output than Sonnet 4.6.
+
+The test file (`app/__tests__/TodoList.test.tsx`) is 5,403 tokens — by far the largest single source file in the project. If Haiku had generated that file instead of Sonnet, the output cost for that step alone would be:
 
 ```
-Agent Skills & Guides:  52,126 tokens (68.7%) - Vercel tools
-Documentation:         3,949 tokens (5.2%)   - Workflow, plans
-Source Code:           19,785 tokens (26.1%) - React components
+Sonnet 4.6:  5,403 × $0.000015 = $0.081
+Haiku 4.5:   5,403 × $0.000005 = $0.027
+Savings:                          $0.054
 ```
 
----
-
-## Optimization Opportunities
-
-### 🎯 Optimization 1: Exclude Large Skill Guides from Context
-
-**Problem**: Vercel skill AGENTS.md consumes 34.8% of context (26,362 tokens)
-
-**Solution**: Update `.claude/settings.json` to exclude skill documentation
-
-**Impact**:
-```
-Before: 75,860 tokens total
-After:  ~49,500 tokens (34.8% reduction)
-Cost saved per context: ~$0.24 USD per full context load
-```
-
-**Implementation**: Add to permissions.deny:
-```
-"app/.agents/skills/**/*.md"
-```
-
-### 🎯 Optimization 2: Use Cheaper Model for Routine Tasks
-
-**Problem**: Using Claude 3.5 Sonnet ($0.003/1K input) for all operations
-
-**Solution**: Use Claude 3.5 Haiku for:
-- Code reviews (1/10th the cost)
-- Documentation writing
-- Testing & verification
-
-**Pricing**:
-- Sonnet: $3/$15 per 1M tokens
-- Haiku: $0.80/$4 per 1M tokens
-- Cost reduction: **73% for routine tasks**
-
-**Implementation**: 
-- Use Sonnet for: planning, architecture, complex problem-solving
-- Use Haiku for: testing, documentation, code formatting
-
-**Expected savings**: ~$0.25 per feature development
-
-### 🎯 Optimization 3: Shorter Planning Cycles
-
-**Problem**: Initial exploration phase consumed ~35,000 tokens
-
-**Solution**: Pre-write detailed requirements before planning
-
-**Benefits**:
-```
-Current: 20,000 (exploration) + 15,000 (plan) = 35,000 tokens
-Optimized: 5,000 (brief) + 10,000 (plan) = 15,000 tokens
-Savings: 20,000 tokens (57% reduction)
-Cost saved: ~$0.09 per planning cycle
-```
-
----
-
-## Cost Optimization Recommendations
-
-### ✅ Quick Wins (Implement Immediately)
-
-1. **Exclude Skill Guides** - Add `.agents/skills/` to permissions.deny
-   - Effort: 2 minutes
-   - Savings: $0.24 per context
-   - Priority: **HIGH**
-
-2. **Use Haiku for Documentation** - Ask for Haiku tier on routine tasks
-   - Effort: 1 minute per request
-   - Savings: 73% on task cost
-   - Priority: **HIGH**
-
-### 📋 Medium-Term Improvements
-
-3. **Pre-write Acceptance Criteria** - Define requirements fully before planning
-   - Effort: 10 minutes per feature
-   - Savings: 57% on planning tokens
-   - Priority: **MEDIUM**
-
-4. **Minimize Exploration Phase** - Provide specific file paths instead of broad searches
-   - Effort: 5 minutes per feature
-   - Savings: 30% on initial exploration
-   - Priority: **MEDIUM**
-
-### 🚀 Long-Term Optimizations
-
-5. **Create Project-Specific Context Files** - Document patterns once
-   - Effort: 30 minutes setup
-   - Savings: 40% on future features (compound effect)
-   - Priority: **LOW** (but high ROI)
-
-6. **Use Code Search Tools** - Replace broad exploration with targeted grep/glob
-   - Effort: 2 minutes training
-   - Savings: 25% on context per feature
-   - Priority: **MEDIUM**
-
----
-
-## Financial Impact
-
-### Current Approach (Before Optimizations)
-
-**Cost Per Feature**:
-```
-Planning:      $0.285
-Development:   $0.600
-Documentation: $0.055
-──────────────────
-Total:         $0.94 per feature
-```
-
-**Monthly Cost** (assuming 10 features/month):
-```
-10 features × $0.94 = $9.40/month
-```
-
-### Optimized Approach
-
-**Cost Per Feature** (with optimizations 1-3):
-```
-Planning:      $0.135 (with Haiku + shorter cycles)
-Development:   $0.225 (with Haiku for routine tasks)
-Documentation: $0.015 (with Haiku)
-──────────────────
-Total:         $0.375 per feature
-──────────────────
-Savings:       60% reduction
-```
-
-**Monthly Cost** (10 features/month):
-```
-10 features × $0.375 = $3.75/month
-─────────────────────
-Savings: $5.65/month (60% reduction)
-Yearly savings: $67.80
-```
-
----
-
-## Applied Optimizations
-
-### ✅ Completed: Skill Guide Context Exclusion
-
-**Action**: Updated `.claude/settings.json` to exclude skill documentation
-
-**Result**:
-```
-Before: 75,860 tokens
-After optimization: ~49,500 tokens
-Reduction: 34.8% (26,360 tokens saved)
-Cost impact: -$0.24 per context load
-```
-
-### ✅ Implemented: Task 2 Efficiency
-
-Using the plan-first approach (Plan mode) resulted in:
-- **0 wasted iterations** on feature design
-- **Correct implementation on first try**
-- **No rework or scope creep**
-
-Efficiency: 430 lines of production code with minimal redundancy
-
----
-
-## Measurement Methodology
-
-### Token Counts
-- Used `npx repomix` for accurate token measurement
-- Counts include all code, documentation, configuration
-- Excludes: node_modules, build artifacts, lock files
-
-### Cost Calculation
-- Claude 3.5 Sonnet pricing: $3/$15 per 1M tokens
-- Assumes average 50% input / 50% output ratio
-- Includes safety margin for retries and edge cases
-
-### Verification
-- Repository scanned: 107 files
-- Security check: ✔ No suspicious files
-- Output file: `repomix-output.xml`
+Same logic applies to documentation files (workflow.md: 742 tokens, cost-analysis.md: 1,327 tokens). These don't need architectural reasoning — Haiku handles them fine.
 
 ---
 
 ## Conclusions
 
-### Key Findings
+1. **The repo context footprint (142,870 tokens) is not the session cost.** The actual Task 2 session consumed roughly 33,077 tokens (~$0.17). The agent only reads what it needs per request — not the whole repo at once.
 
-1. **Planning Phase is Critical** — 50% of tokens used, but prevented costly mistakes
-2. **Feature Code is Efficient** — 2.3% of tokens for 430 lines of production code
-3. **Documentation Overhead** — 5.2% tokens for comprehensive workflow docs (worth it)
-4. **Skill Guides are Heavy** — 34.8% of context for reference material (optimize!)
+2. **The skill guide duplication was the biggest cost driver — and it's now fixed.** Removing `.claude/skills/` cut the repo footprint by 59,335 tokens (41.5%), from 142,870 to 83,535 tokens. The single remaining copy in `.agents/skills/` is sufficient for both the skills CLI and Claude Code.
 
-### Recommendations Summary
-
-| Priority | Action | Savings | Effort |
-|----------|--------|---------|--------|
-| HIGH | Exclude skill guides | 34.8% | 2 min |
-| HIGH | Use Haiku for routine | 73% | 1 min |
-| MEDIUM | Pre-write requirements | 57% | 10 min |
-| MEDIUM | Targeted exploration | 30% | 5 min |
-| LOW | Create context templates | 40% | 30 min |
-
-### Overall Impact
-
-**Implementing just the HIGH priority items would reduce feature cost by ~60%**
-
-From $0.94 to $0.375 per feature = **$5.65/month savings** (10 features/month)
+3. **Choosing the right model for the right task matters more on output.** Test generation (5,403 output tokens) and documentation are good candidates for Haiku 4.5 — switching those alone would cut output cost for this session from $0.080 to roughly $0.040.
 
 ---
 
-## Next Steps
-
-1. ✅ Baseline established (75,860 tokens / $1.14 per full context)
-2. ✅ Optimizations identified (up to 60% cost reduction possible)
-3. → Test optimizations on Task 4 (A/B prompt testing)
-4. → Measure real savings and document best practices
-
----
-
-**Report Generated**: 2026-06-07  
-**Repository Version**: ws01/slava5879  
-**Analysis Tool**: Repomix v1.14.1
+*Model: Claude Sonnet 4.6 (`claude-sonnet-4-6`) — $3.00/1M input, $15.00/1M output*  
+*Repo scanned: 2026-06-17 via `npx repomix` (v1.14.1) — post-fix baseline*  
+*Conversation tokens: estimated from measured file sizes; IDE usage screen not captured*

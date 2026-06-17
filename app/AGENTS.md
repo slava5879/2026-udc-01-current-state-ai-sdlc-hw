@@ -1,38 +1,38 @@
-﻿cd# Agents
+# Agents
 
 ## Stack & Versions
 
-- **Next.js**: 14.x
-- **React**: 18.x
+- **Next.js**: 16.2.7
+- **React**: 19.2.4
 - **Node.js**: 26.3.0
 - **npm**: 11.16.0
 - **TypeScript**: 5.x
-- **Tailwind CSS**: 3.x
-- **ESLint**: 8.x
+- **Tailwind CSS**: 4.x
+- **ESLint**: 9.x
 
 ## Commands
 
 ### Development
-``ash
+```bash
 npm run dev
-``
+```
 Starts the development server at http://localhost:3000 with hot reload.
 
 ### Build
-``ash
+```bash
 npm run build
-``
+```
 Creates an optimized production build.
 
 ### Testing
-``ash
+```bash
 npm run test
-``
+```
 Runs the test suite.
 
-``ash
+```bash
 npm run test -- --watch
-``
+```
 Runs tests in watch mode for continuous feedback.
 
 ## Conventions
